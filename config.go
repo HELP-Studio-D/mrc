@@ -76,4 +76,35 @@ func DefaultConfig() (ServerConfig, error) {
 	}, nil	
 }
 
+func toCABIConfig(config ServerConfig) cabi.ServerConfig {
+	return cabi.ServerConfig{
+		BindIP:         config.BindIP,
+		Port:           config.Port,
+		MaxBatch:       config.MaxBatch,
+		MaxInFlight:    config.MaxInFlight,
+		MaxConnections: config.MaxConnections,
 
+		DrainTimeout:   config.DrainTimeout,
+		ShutdownGrace:  config.ShutdownGrace,
+		RequestTimeout: config.RequestTimeout,
+
+		Framer: cabi.FramerConfig{
+			MaxMessageLength: config.Framer.MaxMessageLength,
+			OpcodePos:        config.Framer.OpcodePos,
+			VersionPos:       config.Framer.VersionPos,
+			RouteLenPos:      config.Framer.RouteLenPos,
+			RouteOrder:       config.Framer.RouteOrder,
+			PayloadOrder:     config.Framer.PayloadOrder,
+			OptionsOrder:     config.Framer.OptionsOrder,
+			OptionsCountPos:  config.Framer.OptionsCountPos,
+			OptionsKeyFirst:  config.Framer.OptionsKeyFirst,
+			HeaderLength:     config.Framer.HeaderLength,
+
+			BigBytesConfig: cabi.BigBytesConfig{
+				OptionsLenOrder: config.Framer.BigBytesConfig.OptionsLenOrder,
+				PayloadLenOrder: config.Framer.BigBytesConfig.PayloadLenOrder,
+				ReqIDOrder:      config.Framer.BigBytesConfig.ReqIDOrder,
+			},
+		},
+	}
+}

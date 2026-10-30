@@ -8,7 +8,7 @@ import (
 	"github.com/Edestuss0/MMA-Network-protocol/cabi"
 )
 
-type option = cabi.Option
+type RequestOption = cabi.Option
 
 type Request struct {
 	Opcode  cabi.RequestOpcode
@@ -16,7 +16,7 @@ type Request struct {
 	ReqID   uint32
 
 	Route   string
-	Options []option
+	Options []RequestOption
 	Payload []byte
 
 	ctx context.Context
@@ -25,7 +25,7 @@ type Request struct {
 var ErrEmptyPayload = errors.New("mrc: request payload is empty")
 
 func NewRequest(source *cabi.Request, ctx context.Context) *Request {
-	options := append([]option(nil), source.Options...)
+	options := append([]RequestOption(nil), source.Options...)
 	payload := append([]byte(nil), source.Payload...)
 
 	return &Request{

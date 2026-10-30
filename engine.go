@@ -1,6 +1,7 @@
 package mrc
 
 import (
+	"errors"
 	"fmt"
 	"sync"
 
@@ -17,8 +18,16 @@ type Engine struct {
 	// Routes stores registered route names.
 	routes map[string]struct{}
 
+	// Routes for channel
+	channelRoutes map[string]struct{}
+
+	// Support for channel
+	channelHandleMu  sync.RWMutex
+	channelHandle    *cabi.ServerHandle
+
 	// Protects engine state.
 	mu sync.Mutex
+	lifecycleMu sync.RWMutex
 
 	// Indicates whether the server has started.
 	started bool
@@ -87,9 +96,10 @@ func New(config ServerConfig) (*Engine, error) {
 	}
 
 	engine := &Engine{
-		ServerConfig: config,
-		native:       native,
-		routes:       make(map[string]struct{}),
+		ServerConfig:  config,
+		native:        native,
+		routes:        make(map[string]struct{}),
+		channelRoutes: make(map[string]struct{}),
 	}
 
 	engine.RouterGroup = RouterGroup{
@@ -101,42 +111,123 @@ func New(config ServerConfig) (*Engine, error) {
 
 // Start starts the underlying native server.
 func (e *Engine) Start() error {
-	e.mu.Lock()
-	defer e.mu.Unlock()
-
 	if e == nil || e.native == nil {
 		return ErrServerNotInitialized
 	}
 
+	e.lifecycleMu.Lock()
+	defer e.lifecycleMu.Unlock()
+
+	e.mu.Lock()
+
 	if e.closed {
+		e.mu.Unlock()
 		return cabi.ErrClosed
 	}
 
 	if e.started {
+		e.mu.Unlock()
 		return cabi.ErrServerRunning
 	}
 
 	if err := e.native.Start(); err != nil {
+		e.mu.Unlock()
 		return err
 	}
 
 	e.started = true
+
+	handle, err := e.native.GetHandle()
+	if err != nil {
+		e.mu.Unlock()
+		_ = e.native.Stop()
+		return err
+	}
+
+	e.channelHandleMu.Lock()
+	e.channelHandle = handle
+	e.channelHandleMu.Unlock()
+
+	e.mu.Unlock()
+
 	return nil
 }
 
 // Close releases the native server resources.
 func (e *Engine) Close() error {
-	e.mu.Lock()
-	defer e.mu.Unlock()
-
-	if e == nil || e.native == nil {
-		return ErrServerNotInitialized
+	if e == nil {
+		return nil
 	}
 
+	e.lifecycleMu.Lock()
+	defer e.lifecycleMu.Unlock()
+
+	e.mu.Lock()
+
 	if e.closed {
+		e.mu.Unlock()
 		return nil
 	}
 
 	e.closed = true
-	return e.native.Close()
+	native := e.native
+
+	e.mu.Unlock()
+
+	handle := e.takeChannelHandle()
+
+	if handle != nil {
+		_ = handle.Close()
+	}
+
+	if native == nil {
+		return ErrServerNotInitialized
+	}
+
+	return native.Close()
+}
+
+func (e *Engine) BoundPort() (int, error) {
+	if e == nil || e.native == nil {
+		return 0, ErrServerNotInitialized
+	}
+
+	p, err := e.native.BoundPort()
+	if err != nil {
+		return 0, err
+	}
+
+	return int(p), nil
+}
+
+func (e *Engine) ChangeConfig(newConfig ServerConfig) error {
+    if e == nil || e.native == nil {
+        return ErrServerNotInitialized
+    }
+
+    e.mu.Lock()
+    defer e.mu.Unlock()
+
+    if e.closed {
+        return cabi.ErrClosed
+    }
+
+    if !e.started {
+        return errors.New("mrc: server is not running")
+    }
+
+    handle, err := e.native.GetHandle()
+    if err != nil {
+        return err
+    }
+    defer handle.Close()
+
+    if err := handle.ChangeConfig(toCABIConfig(newConfig)); err != nil {
+        return err
+    }
+
+    // Update the Go-side configuration only after native success.
+    e.ServerConfig = newConfig
+
+    return nil
 }

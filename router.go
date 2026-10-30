@@ -41,7 +41,7 @@ func (e *Engine) Handle(
 		return ErrServerStarted
 	}
 
-	if route == "" || len(handlers) == 0 {
+	if route == "" || len(handlers) == 0 || handlers == nil {
 		return ErrInvalidRoute
 	}
 
@@ -113,7 +113,7 @@ func makeRouteHandler(handlers HandlersChain) cabi.RouteHandler {
 		requestCtx, cancel := context.WithCancel(context.Background())
 		defer cancel()
 
-		// Convert the native request into the public MMA request.
+		// Convert the native request into the public MRC request.
 		request := NewRequest(nativeRequest, requestCtx)
 
 		// Adapt the native response builder.
