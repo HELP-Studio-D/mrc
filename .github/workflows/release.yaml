@@ -1,0 +1,92 @@
+
+    
+  
+name: Test and publish MRC Go library
+
+on:
+  push:
+    tags:
+      - 'v*'
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: Test ${{ matrix.goos }}/${{ matrix.goarch }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: windows-latest
+            goos: windows
+            goarch: amd64
+          - runner: ubuntu-22.04
+            goos: linux
+            goarch: amd64
+          - runner: macos-15-intel
+            goos: darwin
+            goarch: amd64
+          - runner: macos-15
+            goos: darwin
+            goarch: arm64
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+          cache-dependency-path: |
+            go.sum
+            benchmark/go.sum
+
+      - name: Verify Go target
+        shell: bash
+        run: |
+          set -euo pipefail
+          actual_goos="$(go env GOOS)"
+          actual_goarch="$(go env GOARCH)"
+          echo "Runner target: ${actual_goos}/${actual_goarch}"
+          test "$actual_goos" = "${{ matrix.goos }}"
+          test "$actual_goarch" = "${{ matrix.goarch }}"
+
+      - name: Download and verify dependencies
+        run: |
+          go mod download
+          go mod verify
+
+      - name: Vet MRC
+        run: go vet ./...
+
+      - name: Test MRC package
+        run: go test ./...
+
+      - name: Test benchmark protocol helpers
+        working-directory: benchmark
+        run: |
+          go mod download
+          go mod verify
+          go test ./cmd/bench
+
+  publish-release:
+    name: Publish Go module release
+    needs: test
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          generate_release_notes: true
+          fail_on_unmatched_files: false
+
+            
