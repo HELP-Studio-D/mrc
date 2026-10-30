@@ -7,7 +7,7 @@ import (
     "os"
     "runtime/debug"
     "time"
-    "mrc"
+    "github.com/HELP-Studio-D/mrc"
 )
 
 // RecoveryFunc defines a custom panic recovery handler.

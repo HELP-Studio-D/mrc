@@ -8,7 +8,7 @@ import (
 	"strings"
 	"sync/atomic"
 	"time"
-	"mrc"
+	"github.com/HELP-Studio-D/mrc"
 )
 
 // consoleColorModeValue defines how console colors are handled.
