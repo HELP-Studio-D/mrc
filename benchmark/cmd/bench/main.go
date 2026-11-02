@@ -298,15 +298,13 @@ func startMRCServer() *mrc.Engine {
 		fatalf("create MRC engine: %v", err)
 	}
 
-	if err := engine.Handle("/json", func(c *mrc.Context) {
+	engine.Handle("/json", func(c *mrc.Context) {
 		if err := c.JSON(mrc.StatusOK, payload); err != nil {
 			log.Printf("MRC /json response write failed: %v", err)
 		}
-	}); err != nil {
-		fatalf("register MRC /json: %v", err)
-	}
+	})
 
-	if err := engine.Handle("/bytes", func(c *mrc.Context) {
+	engine.Handle("/bytes", func(c *mrc.Context) {
 		if err := c.Data(
 			mrc.StatusOK,
 			"application/json; charset=utf-8",
@@ -314,11 +312,9 @@ func startMRCServer() *mrc.Engine {
 		); err != nil {
 			log.Printf("MRC /bytes response write failed: %v", err)
 		}
-	}); err != nil {
-		fatalf("register MRC /bytes: %v", err)
-	}
+	})
 
-	if err := engine.Start(); err != nil {
+	if err := engine.Run(); err != nil {
 		fatalf("start MRC server: %v", err)
 	}
 	return engine
