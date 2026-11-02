@@ -23,17 +23,17 @@ type Engine struct {
 	channelRoutes map[string]struct{}
 
 	// Support for channel
-	channelHandleMu  sync.RWMutex
-	channelHandle    *cabi.ServerHandle
+	channelHandleMu sync.RWMutex
+	channelHandle   *cabi.ServerHandle
 
 	// Protects engine state.
-	mu sync.Mutex
+	mu          sync.Mutex
 	lifecycleMu sync.RWMutex
 
 	// Request timeout.
 	requestTimeout time.Duration
 
-	done chan struct{}
+	done      chan struct{}
 	closeOnce sync.Once
 
 	// Indicates whether the server has started.
@@ -133,33 +133,33 @@ func (e *Engine) BoundPort() (int, error) {
 }
 
 func (e *Engine) ChangeConfig(newConfig ServerConfig) error {
-    if e == nil || e.native == nil {
-        return ErrServerNotInitialized
-    }
+	if e == nil || e.native == nil {
+		return ErrServerNotInitialized
+	}
 
-    e.mu.Lock()
-    defer e.mu.Unlock()
+	e.mu.Lock()
+	defer e.mu.Unlock()
 
-    if e.closed {
-        return cabi.ErrClosed
-    }
+	if e.closed {
+		return cabi.ErrClosed
+	}
 
-    if !e.started {
-        return errors.New("mrc: server is not running")
-    }
+	if !e.started {
+		return errors.New("mrc: server is not running")
+	}
 
-    handle, err := e.native.GetHandle()
-    if err != nil {
-        return err
-    }
-    defer handle.Close()
+	handle, err := e.native.GetHandle()
+	if err != nil {
+		return err
+	}
+	defer handle.Close()
 
-    if err := handle.ChangeConfig(toCABIConfig(newConfig)); err != nil {
-        return err
-    }
+	if err := handle.ChangeConfig(toCABIConfig(newConfig)); err != nil {
+		return err
+	}
 
-    // Update the Go-side configuration only after native success.
-    e.ServerConfig = newConfig
+	// Update the Go-side configuration only after native success.
+	e.ServerConfig = newConfig
 
-    return nil
+	return nil
 }

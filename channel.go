@@ -75,7 +75,6 @@ func (c *ChannelContext) expire() {
 	c.engine = nil
 }
 
-
 func (e *Engine) HandleChannel(
 	route string,
 	handler ChannelHandlerFunc,

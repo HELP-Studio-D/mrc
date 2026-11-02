@@ -12,12 +12,12 @@ var (
 
 // Run function for start a server
 func (e *Engine) Run() error {
-    if err := e.start(); err != nil {
-        return err
-    }
+	if err := e.start(); err != nil {
+		return err
+	}
 
-    <-e.done
-    return nil
+	<-e.done
+	return nil
 }
 
 func (e *Engine) Stop() error {
@@ -115,8 +115,8 @@ func (e *Engine) Close() error {
 	native := e.native
 
 	e.closeOnce.Do(func() {
-        close(e.done)
-    })
+		close(e.done)
+	})
 
 	e.mu.Unlock()
 

@@ -28,52 +28,56 @@ var (
 )
 
 // Handle registers a new route and its handler chain.
-func (e *Engine) Handle(
-	route string,
-	handlers ...HandlerFunc,
-) {
+// It panics if the route cannot be registered.
+func (e *Engine) Handle(route string, handlers ...HandlerFunc) {
+	if err := e.registerRoute(route, handlers...); err != nil {
+		panic(err)
+	}
+}
+
+func (e *Engine) registerRoute(route string, handlers ...HandlerFunc) error {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 
 	if e.closed {
-		fmt.Errorf(cabi.ErrClosed.Error())
-		return 
+		return cabi.ErrClosed
 	}
 
 	if e.started {
-		fmt.Errorf(ErrServerStarted.Error())
-		return 
+		return ErrServerStarted
 	}
 
-	if route == "" || len(handlers) == 0 || handlers == nil {
-		fmt.Errorf(ErrInvalidRoute.Error())
-		return 
+	if route == "" || len(handlers) == 0 {
+		return ErrInvalidRoute
+	}
+
+	for i, handler := range handlers {
+		if handler == nil {
+			return fmt.Errorf("%w: nil handler at index %d", ErrInvalidRoute, i)
+		}
 	}
 
 	if _, exists := e.routes[route]; exists {
-		fmt.Errorf(ErrRouteAlreadyExists.Error())
-		return 
+		return fmt.Errorf("%w: %q", ErrRouteAlreadyExists, route)
 	}
 
-	// Copy global middleware.
+	if e.native == nil {
+		return errors.New("mrc: native server is not initialized")
+	}
+
 	chain := make(HandlersChain, 0, len(e.middleware)+len(handlers))
 	chain = append(chain, e.middleware...)
-
-	// Append route-specific handlers.
 	chain = append(chain, handlers...)
 
-	// Convert the high-level handler chain into a C ABI callback.
 	callback := makeRouteHandler(e.requestTimeout, chain)
 
-	// Register the route in the underlying Rust server.
 	if err := e.native.RegisterRoute(route, callback); err != nil {
-		fmt.Errorf(err.Error())
-		return 
+		return fmt.Errorf("mrc: register route %q: %w", route, err)
 	}
 
 	e.routes[route] = struct{}{}
 
-	return
+	return nil
 }
 
 // AddOption adds a key-value option to the native response.
@@ -87,69 +91,69 @@ func (w cabiResponseWriter) AddOption(key, value string) error {
 
 // SetStatus sets the response status in the native response.
 func (w cabiResponseWriter) SetStatus(status Status) error {
-    if w.builder == nil {
-        return cabi.ErrInvalidArgument
-    }
+	if w.builder == nil {
+		return cabi.ErrInvalidArgument
+	}
 
-    return w.builder.SetStatus(cabi.ResponseOpcode(status))
+	return w.builder.SetStatus(cabi.ResponseOpcode(status))
 }
 
 // SetPayload writes the response payload.
 func (w cabiResponseWriter) SetPayload(payload []byte) error {
-    if w.builder == nil {
-        return cabi.ErrInvalidArgument
-    }
+	if w.builder == nil {
+		return cabi.ErrInvalidArgument
+	}
 
-    return w.builder.SetPayload(payload)
+	return w.builder.SetPayload(payload)
 }
 
 func makeRouteHandler(
-    timeout time.Duration,
-    handlers HandlersChain,
+	timeout time.Duration,
+	handlers HandlersChain,
 ) cabi.RouteHandler {
 	// Create a copy so the registered callback has its own
 	// immutable handler chain.
-    chain := append(HandlersChain(nil), handlers...)
+	chain := append(HandlersChain(nil), handlers...)
 
-    return func(
-        nativeRequest *cabi.Request,
-        nativeResponse *cabi.ResponseBuilder,
-    ) error {
-        if nativeRequest == nil || nativeResponse == nil {
-            return cabi.ErrInvalidArgument
-        }
+	return func(
+		nativeRequest *cabi.Request,
+		nativeResponse *cabi.ResponseBuilder,
+	) error {
+		if nativeRequest == nil || nativeResponse == nil {
+			return cabi.ErrInvalidArgument
+		}
 
 		// Create a context for the current request.
-        requestCtx, cancel := context.WithTimeout(
-            context.Background(),
-            timeout,
-        )
-        defer cancel()
+		requestCtx, cancel := context.WithTimeout(
+			context.Background(),
+			timeout,
+		)
+		defer cancel()
 
 		// Convert the native request into the public MRC request.
-        request := NewRequest(nativeRequest, requestCtx)
+		request := NewRequest(nativeRequest, requestCtx)
 
 		// Adapt the native response builder.
-        writer := cabiResponseWriter{
-            builder: nativeResponse,
-        }
+		writer := cabiResponseWriter{
+			builder: nativeResponse,
+		}
 
 		// Create the high-level request context.
-        ctx := NewContext(
-            request,
-            writer,
-            chain,
-        )
+		ctx := NewContext(
+			request,
+			writer,
+			chain,
+		)
 
 		// The context must not be used after the callback returns.
-        defer ctx.expire()
+		defer ctx.expire()
 
 		// Execute all middleware and the route handler.
-        ctx.Next()
+		ctx.Next()
 
 		// Propagate response writing errors to the C ABI layer.
-        return ctx.writeErr
-    }
+		return ctx.writeErr
+	}
 }
 
 // Ensure cabiResponseWriter implements responseWriter.

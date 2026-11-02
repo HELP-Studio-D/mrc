@@ -5,7 +5,7 @@ import (
 )
 
 const (
-	contextTokenKey = "authToken"
+	contextTokenKey  = "authToken"
 	contextClaimsKey = "authClaims"
 
 	// All status codes for mrc/protocol answer

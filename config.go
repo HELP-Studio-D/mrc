@@ -34,7 +34,7 @@ type FramerConfig struct {
 	BigBytesConfig   BigBytesConfig
 }
 
-// Need to place trailing bytes in header  
+// Need to place trailing bytes in header
 type BigBytesConfig struct {
 	OptionsLenOrder uint8
 	PayloadLenOrder uint8
@@ -73,7 +73,7 @@ func DefaultConfig() (ServerConfig, error) {
 				ReqIDOrder:      output.Framer.BigBytesConfig.ReqIDOrder,
 			},
 		},
-	}, nil	
+	}, nil
 }
 
 func toCABIConfig(config ServerConfig) cabi.ServerConfig {

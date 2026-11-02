@@ -8,15 +8,15 @@ import (
 	"github.com/HELP-Studio-D/mrc/middleware"
 )
 
-func main()  {
+func main() {
 	// Главный элемент приложения для управлением всем фреймворком
 	server, err := mrc.NewWithOptions(
 		mrc.WithBindIP("127.0.0.1"),
 		mrc.WithPort(8080),
 	)
 	if err != nil {
-		fmt.Errorf(err.Error())
-		return 
+		fmt.Println(err.Error())
+		return
 	}
 
 	// Объявление логгера запросов на сервер
@@ -28,7 +28,7 @@ func main()  {
 		_ = c.String(mrc.StatusOK, "World!")
 	})
 
-	// Запуск сервера 
+	// Запуск сервера
 	if err := server.Run(); err != nil {
 		log.Fatal("Server isn't running, error:" + err.Error())
 	}

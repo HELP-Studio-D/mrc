@@ -2,13 +2,13 @@ package middleware
 
 import (
 	"fmt"
+	"github.com/HELP-Studio-D/mrc"
 	"io"
 	"log"
 	"os"
 	"strings"
 	"sync/atomic"
 	"time"
-	"github.com/HELP-Studio-D/mrc"
 )
 
 // consoleColorModeValue defines how console colors are handled.
@@ -102,7 +102,7 @@ var validStatusCodes = map[int]struct{}{
 	int(mrc.StatusNotFound):         {},
 	int(mrc.StatusConflict):         {},
 	int(mrc.StatusInternalError):    {},
-	int(mrc.StatusMessage):           {},
+	int(mrc.StatusMessage):          {},
 	int(mrc.StatusChannelConnected): {},
 	int(mrc.StatusTimeout):          {},
 	int(mrc.StatusUnauthorized):     {},
@@ -233,9 +233,9 @@ var defaultLogFormatter LogFormatter = func(param LogFormatterParams) string {
 	}
 
 	var (
-		route     string
-		reqID     uint32
-		opcode    string
+		route  string
+		reqID  uint32
+		opcode string
 	)
 
 	if param.Request != nil {

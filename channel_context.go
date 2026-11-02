@@ -7,8 +7,8 @@ type ChannelContext struct {
 	Request      *Request
 	ConnectionID uint32
 
-	engine *Engine
-	active bool
+	engine   *Engine
+	active   bool
 	writeErr error
 }
 

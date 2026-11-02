@@ -12,7 +12,7 @@ type RouterGroup struct {
 func (g *RouterGroup) Handle(
 	route string,
 	handlers ...HandlerFunc,
-) {
+) error {
 	fullRoute := g.joinRoute(g.prefix, route)
 
 	chain := make(
@@ -23,30 +23,32 @@ func (g *RouterGroup) Handle(
 
 	chain = append(chain, g.middleware...)
 	chain = append(chain, handlers...)
-	
-	g.engine.Handle(fullRoute, chain...)
-	return 
+
+	if err := g.engine.registerRoute(fullRoute, chain...); err != nil {
+		return err
+	}
+	return nil
 }
 
 // Group creates a new router group with the specified prefix and middleware.
 func (g *RouterGroup) Group(
-    prefix string,
-    handlers ...HandlerFunc,
+	prefix string,
+	handlers ...HandlerFunc,
 ) *RouterGroup {
-    middleware := make(
-        HandlersChain,
-        0,
-        len(g.middleware)+len(handlers),
-    )
+	middleware := make(
+		HandlersChain,
+		0,
+		len(g.middleware)+len(handlers),
+	)
 
-    middleware = append(middleware, g.middleware...)
-    middleware = append(middleware, handlers...)
+	middleware = append(middleware, g.middleware...)
+	middleware = append(middleware, handlers...)
 
-    return &RouterGroup{
-        middleware: middleware,
-        prefix:     g.joinRoute(g.prefix, prefix),
-        engine:     g.engine,
-    }
+	return &RouterGroup{
+		middleware: middleware,
+		prefix:     g.joinRoute(g.prefix, prefix),
+		engine:     g.engine,
+	}
 }
 
 // Use registers middleware for the router group.

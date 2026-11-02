@@ -13,10 +13,10 @@ func testAuthConfig() AuthConfig {
 			SigningKey: []byte(
 				"0123456789abcdef0123456789abcdef",
 			),
-			Issuer:   "mrc-test",
-			Audience: []string{"mrc-tests"},
-			AccessTTL:  time.Hour,
-			Leeway:     0,
+			Issuer:    "mrc-test",
+			Audience:  []string{"mrc-tests"},
+			AccessTTL: time.Hour,
+			Leeway:    0,
 		},
 		Password: PasswordConfig{
 			BcryptCost: bcrypt.MinCost,
