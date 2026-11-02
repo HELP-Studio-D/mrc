@@ -12,10 +12,7 @@ type RouterGroup struct {
 func (g *RouterGroup) Handle(
 	route string,
 	handlers ...HandlerFunc,
-) error {
-	g.engine.mu.Lock()
-	defer g.engine.mu.Unlock()
-
+) {
 	fullRoute := g.joinRoute(g.prefix, route)
 
 	chain := make(
@@ -26,8 +23,9 @@ func (g *RouterGroup) Handle(
 
 	chain = append(chain, g.middleware...)
 	chain = append(chain, handlers...)
-
-	return g.engine.Handle(fullRoute, chain...)
+	
+	g.engine.Handle(fullRoute, chain...)
+	return 
 }
 
 // Group creates a new router group with the specified prefix and middleware.
@@ -35,9 +33,6 @@ func (g *RouterGroup) Group(
     prefix string,
     handlers ...HandlerFunc,
 ) *RouterGroup {
-	g.engine.mu.Lock()
-	defer g.engine.mu.Unlock()
-
     middleware := make(
         HandlersChain,
         0,

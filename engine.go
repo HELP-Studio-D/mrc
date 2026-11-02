@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"sync"
+	"time"
 
 	cabi "github.com/Edestuss0/MMA-Network-protocol/cabi"
 )
@@ -29,6 +30,12 @@ type Engine struct {
 	mu sync.Mutex
 	lifecycleMu sync.RWMutex
 
+	// Request timeout.
+	requestTimeout time.Duration
+
+	done chan struct{}
+	closeOnce sync.Once
+
 	// Indicates whether the server has started.
 	started bool
 
@@ -38,6 +45,7 @@ type Engine struct {
 	// Add more methods to engine
 	ServerConfig
 	RouterGroup
+	Auth *AuthManager
 }
 
 // NewWithOptions creates a server using functional options.
@@ -96,10 +104,12 @@ func New(config ServerConfig) (*Engine, error) {
 	}
 
 	engine := &Engine{
-		ServerConfig:  config,
-		native:        native,
-		routes:        make(map[string]struct{}),
-		channelRoutes: make(map[string]struct{}),
+		ServerConfig:   config,
+		native:         native,
+		routes:         make(map[string]struct{}),
+		channelRoutes:  make(map[string]struct{}),
+		done:           make(chan struct{}),
+		requestTimeout: config.RequestTimeout,
 	}
 
 	engine.RouterGroup = RouterGroup{
@@ -107,84 +117,6 @@ func New(config ServerConfig) (*Engine, error) {
 	}
 
 	return engine, nil
-}
-
-// Start starts the underlying native server.
-func (e *Engine) Start() error {
-	if e == nil || e.native == nil {
-		return ErrServerNotInitialized
-	}
-
-	e.lifecycleMu.Lock()
-	defer e.lifecycleMu.Unlock()
-
-	e.mu.Lock()
-
-	if e.closed {
-		e.mu.Unlock()
-		return cabi.ErrClosed
-	}
-
-	if e.started {
-		e.mu.Unlock()
-		return cabi.ErrServerRunning
-	}
-
-	if err := e.native.Start(); err != nil {
-		e.mu.Unlock()
-		return err
-	}
-
-	e.started = true
-
-	handle, err := e.native.GetHandle()
-	if err != nil {
-		e.mu.Unlock()
-		_ = e.native.Stop()
-		return err
-	}
-
-	e.channelHandleMu.Lock()
-	e.channelHandle = handle
-	e.channelHandleMu.Unlock()
-
-	e.mu.Unlock()
-
-	return nil
-}
-
-// Close releases the native server resources.
-func (e *Engine) Close() error {
-	if e == nil {
-		return nil
-	}
-
-	e.lifecycleMu.Lock()
-	defer e.lifecycleMu.Unlock()
-
-	e.mu.Lock()
-
-	if e.closed {
-		e.mu.Unlock()
-		return nil
-	}
-
-	e.closed = true
-	native := e.native
-
-	e.mu.Unlock()
-
-	handle := e.takeChannelHandle()
-
-	if handle != nil {
-		_ = handle.Close()
-	}
-
-	if native == nil {
-		return ErrServerNotInitialized
-	}
-
-	return native.Close()
 }
 
 func (e *Engine) BoundPort() (int, error) {

@@ -1,3 +1,6 @@
+// THAT IS NOT NEEDED FUNCTION
+// All panics are being processing on rust-protocol level
+
 package middleware
 
 import (

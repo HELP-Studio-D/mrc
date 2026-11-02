@@ -10,20 +10,6 @@ import (
 
 type Status = cabi.ResponseOpcode
 
-const (
-	StatusOK               = cabi.StatusOK
-	StatusBadRequest       = cabi.StatusBadRequest
-	StatusUnauthorized     = cabi.StatusUnauthorized
-	StatusForbidden        = cabi.StatusForbidden
-	StatusNotFound         = cabi.StatusNotFound
-	StatusConflict         = cabi.StatusConflict
-	StatusInternalError    = cabi.StatusInternalError
-	StatusMessage          = cabi.StatusMessage
-	StatusShutdown         = cabi.StatusShutdown
-	StatusChannelConnected = cabi.StatusChannelConnected
-	StatusTimeout          = cabi.StatusTimeout
-)
-
 type HandlerFunc func(*Context)
 type H map[string]any
 
@@ -69,7 +55,7 @@ type Context struct {
 	// Live cycle
 	active bool
 
-	mu sync.Mutex
+	mu sync.RWMutex
 }
 
 func NewContext(request *Request, response responseWriter, handlers []HandlerFunc) *Context {
@@ -116,15 +102,18 @@ func (c *Context) IsAborted() bool {
 
 // Context returns the request's standard context.Context
 func (c *Context) Context() context.Context {
-	if c == nil || c.Request == nil {
-		return context.Background()
-	}
-
 	return c.Request.Context()
 }
 
-// Set stores data within the context of the current request
+// Set stores data within the current request.
 func (c *Context) Set(key string, value any) {
+	if c == nil || !c.active {
+		return
+	}
+
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
 	if !c.active {
 		return
 	}
@@ -136,8 +125,15 @@ func (c *Context) Set(key string, value any) {
 	c.keys[key] = value
 }
 
-// Get retrieves data from the context
+// Get retrieves data from the current request.
 func (c *Context) Get(key string) (any, bool) {
+	if c == nil {
+		return nil, false
+	}
+
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+
 	if !c.active {
 		return nil, false
 	}
@@ -146,7 +142,7 @@ func (c *Context) Get(key string) (any, bool) {
 	return value, exists
 }
 
-// MustGet retrieves the value or panics.
+// MustGet retrieves data or panics.
 func (c *Context) MustGet(key string) any {
 	value, exists := c.Get(key)
 	if !exists {
@@ -154,6 +150,22 @@ func (c *Context) MustGet(key string) any {
 	}
 
 	return value
+}
+
+// Delete removes data from the current request.
+func (c *Context) Delete(key string) {
+	if c == nil || !c.active {
+		return
+	}
+
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	if !c.active {
+		return
+	}
+
+	delete(c.keys, key)
 }
 
 // Error stores a server error
@@ -190,7 +202,15 @@ func (c *Context) ResponseSize() int {
 }
 
 func (c *Context) expire() {
+	if c == nil {
+		return
+	}
+
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
 	c.active = false
 	c.response = nil
 	c.handlers = nil
+	c.keys = nil
 }

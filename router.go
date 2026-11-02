@@ -3,6 +3,8 @@ package mrc
 import (
 	"context"
 	"errors"
+	"fmt"
+	"time"
 
 	cabi "github.com/Edestuss0/MMA-Network-protocol/cabi"
 )
@@ -29,24 +31,28 @@ var (
 func (e *Engine) Handle(
 	route string,
 	handlers ...HandlerFunc,
-) error {
+) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 
 	if e.closed {
-		return cabi.ErrClosed
+		fmt.Errorf(cabi.ErrClosed.Error())
+		return 
 	}
 
 	if e.started {
-		return ErrServerStarted
+		fmt.Errorf(ErrServerStarted.Error())
+		return 
 	}
 
 	if route == "" || len(handlers) == 0 || handlers == nil {
-		return ErrInvalidRoute
+		fmt.Errorf(ErrInvalidRoute.Error())
+		return 
 	}
 
 	if _, exists := e.routes[route]; exists {
-		return ErrRouteAlreadyExists
+		fmt.Errorf(ErrRouteAlreadyExists.Error())
+		return 
 	}
 
 	// Copy global middleware.
@@ -57,16 +63,17 @@ func (e *Engine) Handle(
 	chain = append(chain, handlers...)
 
 	// Convert the high-level handler chain into a C ABI callback.
-	callback := makeRouteHandler(chain)
+	callback := makeRouteHandler(e.requestTimeout, chain)
 
 	// Register the route in the underlying Rust server.
 	if err := e.native.RegisterRoute(route, callback); err != nil {
-		return err
+		fmt.Errorf(err.Error())
+		return 
 	}
 
 	e.routes[route] = struct{}{}
 
-	return nil
+	return
 }
 
 // AddOption adds a key-value option to the native response.
@@ -96,47 +103,53 @@ func (w cabiResponseWriter) SetPayload(payload []byte) error {
     return w.builder.SetPayload(payload)
 }
 
-func makeRouteHandler(handlers HandlersChain) cabi.RouteHandler {
+func makeRouteHandler(
+    timeout time.Duration,
+    handlers HandlersChain,
+) cabi.RouteHandler {
 	// Create a copy so the registered callback has its own
 	// immutable handler chain.
-	chain := append(HandlersChain(nil), handlers...)
+    chain := append(HandlersChain(nil), handlers...)
 
-	return func(
-		nativeRequest *cabi.Request,
-		nativeResponse *cabi.ResponseBuilder,
-	) error {
-		if nativeRequest == nil || nativeResponse == nil {
-			return cabi.ErrInvalidArgument
-		}
+    return func(
+        nativeRequest *cabi.Request,
+        nativeResponse *cabi.ResponseBuilder,
+    ) error {
+        if nativeRequest == nil || nativeResponse == nil {
+            return cabi.ErrInvalidArgument
+        }
 
 		// Create a context for the current request.
-		requestCtx, cancel := context.WithCancel(context.Background())
-		defer cancel()
+        requestCtx, cancel := context.WithTimeout(
+            context.Background(),
+            timeout,
+        )
+        defer cancel()
 
 		// Convert the native request into the public MRC request.
-		request := NewRequest(nativeRequest, requestCtx)
+        request := NewRequest(nativeRequest, requestCtx)
 
 		// Adapt the native response builder.
-		writer := cabiResponseWriter{
-			builder: nativeResponse,
-		}
+        writer := cabiResponseWriter{
+            builder: nativeResponse,
+        }
 
 		// Create the high-level request context.
-		ctx := NewContext(
-			request,
-			writer,
-			chain,
-		)
+        ctx := NewContext(
+            request,
+            writer,
+            chain,
+        )
 
 		// The context must not be used after the callback returns.
-		defer ctx.expire()
+        defer ctx.expire()
 
 		// Execute all middleware and the route handler.
-		ctx.Next()
+        ctx.Next()
 
 		// Propagate response writing errors to the C ABI layer.
-		return ctx.writeErr
-	}
+        return ctx.writeErr
+    }
 }
 
 // Ensure cabiResponseWriter implements responseWriter.

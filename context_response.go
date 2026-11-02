@@ -1,9 +1,11 @@
 package mrc
 
 import (
-    "encoding/json"
     "errors"
     "fmt"
+    "sync"
+    "bytes"
+    "github.com/goccy/go-json"
 )
 
 const (
@@ -27,17 +29,35 @@ func (c *Context) Status(status Status) error {
     return nil
 }
 
-// JSON serializes the object and sets it in the payload
+const maxPooledJSONBufferCap = 1 << 20 // 1 MiB
+
+// JSON serializes the object and sets it in the payload.
 func (c *Context) JSON(status Status, value any) error {
     if err := c.ensureWritable(); err != nil {
         return c.recordWriteError(err)
     }
 
-    payload, err := json.Marshal(value)
-    if err != nil {
-        return c.recordWriteError(
-            fmt.Errorf("mrc: JSON encode: %w", err),
-        )
+    buf := jsonBufferPool.Get().(*bytes.Buffer)
+    buf.Reset()
+
+    defer func() {
+        if buf.Cap() <= maxPooledJSONBufferCap {
+            buf.Reset()
+            jsonBufferPool.Put(buf)
+        }
+    }()
+
+    enc := json.NewEncoder(buf)
+    enc.SetEscapeHTML(false)
+
+    if err := enc.Encode(value); err != nil {
+        return fmt.Errorf("mrc: JSON encode: %w", err)
+    }
+
+    payload := buf.Bytes()
+
+    if n := len(payload); n > 0 && payload[n-1] == '\n' {
+        payload = payload[:n-1]
     }
 
     return c.write(status, MIMEApplicationJSON, payload)
@@ -74,7 +94,7 @@ func (c *Context) write(
     payload []byte,
 ) error {
     if err := c.ensureWritable(); err != nil {
-        return c.recordWriteError(err)
+        return err
     }
 
     if contentType != "" {
@@ -82,7 +102,7 @@ func (c *Context) write(
             OptionContentType,
             contentType,
         ); err != nil {
-            return c.recordWriteError(err)
+            return err
         }
     }
 
@@ -170,4 +190,10 @@ func (c *Context) recordWriteError(err error) error {
     }
 
     return err
+}
+
+var jsonBufferPool = sync.Pool{
+	New: func() any {
+		return new(bytes.Buffer)
+	},
 }
